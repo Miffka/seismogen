@@ -1,0 +1,51 @@
+default_stages:
+- commit
+repos:
+# general hooks to verify or beautify code
+- repo: git://github.com/pre-commit/pre-commit-hooks
+  rev: v3.3.0
+  hooks:
+  - id: check-added-large-files
+    args: [--maxkb=10000]
+  - id: trailing-whitespace
+  - id: check-docstring-first
+  - id: check-json
+  - id: check-merge-conflict
+  - id: check-xml
+  - id: check-yaml
+    exclude: ^.*?/.helm/templates
+  - id: detect-aws-credentials
+    args: [--allow-missing-credentials, --credentials-file, docker-compose/.env]
+  - id: detect-private-key
+  - id: mixed-line-ending
+  - id: pretty-format-json
+    args: [--autofix]
+  - id: requirements-txt-fixer
+
+# autoformat code with black formatter
+- repo: https://github.com/psf/black
+  rev: 20.8b1
+  hooks:
+  - id: black
+    name: 'black'
+    files: (^seismogen)
+    args: [ -l 120 ]
+
+# beautify and sort imports
+- repo: https://github.com/pycqa/isort
+  rev: 5.6.4
+  hooks:
+  - id: isort
+    name: 'isort'
+    files: (^seismogen)
+    args: [--profile, black]
+
+# check code style
+- repo: https://gitlab.com/pycqa/flake8
+  rev: 3.8.4
+  hooks:
+  - id: flake8
+    name: 'flake8'
+    additional_dependencies: [ flake8-isort==4.0.0, flake8-quotes==3.0.0, flake8-print==3.1.4 ]
+    files: (^seismogen)
+    args: [--config, seismogen/.flake8]

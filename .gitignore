@@ -85,6 +85,7 @@ trains.conf
 .~lock*
 
 # My files
-models/
-data/
+/models/
+/data/
 notebooks/
+papers/
