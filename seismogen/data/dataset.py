@@ -2,7 +2,7 @@ import os
 import os.path as osp
 from typing import Dict, Optional, Union
 
-import albumentation as A
+import albumentations as A
 import cv2
 import numpy as np
 import pandas as pd
@@ -11,13 +11,24 @@ import torch
 from seismogen.data.rle_utils import rle2mask
 
 
-class Dataset(torch.utils.data.Dataset):
-    def __init__(self, image_dir: str, train_meta: str, transform: Optional[A.Compose] = None, train: bool = True):
+class SegDataset(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        image_dir: str,
+        train_meta: str,
+        num_channels: int = 3,
+        augmentation: Optional[A.Compose] = None,
+        transform: Optional[A.Compose] = None,
+        train: bool = True,
+    ):
         self.image_dir = image_dir
         self.image_names = os.listdir(self.image_dir)
         self.train_meta = (
             pd.read_csv(train_meta).drop_duplicates(["ImageId", "ClassId"]) if train_meta is not None else None
         )
+        assert num_channels in [1, 3], f"Num channels should be in [1, 3], got {num_channels}"
+        self.num_channels = num_channels
+        self.augmentation = augmentation
         self.transform = transform
 
         self.train = train
@@ -30,6 +41,10 @@ class Dataset(torch.utils.data.Dataset):
         path = osp.join(self.image_dir, img_name)
 
         img = cv2.imread(path)
+        if self.num_channels == 1:
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        assert img.ndim == 3, f"Image should have 3 dimensions, got {img.ndim}"
+
         img_shape = (img.shape[0], img.shape[1])
         ce_mask = (
             [
@@ -41,6 +56,10 @@ class Dataset(torch.utils.data.Dataset):
         )
         ce_mask = np.concatenate(ce_mask, -1) if self.train else None
         # np.sum(ce_mask, axis=0, dtype=np.float32)[:, :, None]
+        if self.augmentation is not None:
+            img_mask_dict = self.augmentation(image=img, mask=ce_mask)
+            img, ce_mask = img_mask_dict["image"], img_mask_dict["mask"]
+
         if self.transform is not None:
             if self.train:
                 img = self.transform(image=(img), mask=(ce_mask))
