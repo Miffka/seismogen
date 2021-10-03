@@ -2,6 +2,7 @@ import pandas as pd
 import torch
 import tqdm
 
+from seismogen.data.letterbox import letterbox_backward
 from seismogen.data.rle_utils import out2rle
 from seismogen.torch_config import torch_config
 
@@ -17,9 +18,12 @@ def get_prediction(model: torch.nn.Module, test_loader: torch.utils.data.DataLoa
 
         predict_original_size = []
         for k, _pred in enumerate(predict):
-            predict_original_size.append(
-                torch.nn.functional.interpolate(_pred.unsqueeze(0).cpu(), batch["image_shape"][k].tolist())[0]
-            )
+            if batch["pad"][k] != "None":
+                predict_original_size.append(letterbox_backward(_pred.cpu().numpy(), eval(batch["pad"][k])))
+            else:
+                predict_original_size.append(
+                    torch.nn.functional.interpolate(_pred.unsqueeze(0).cpu(), batch["image_shape"][k].tolist())[0]
+                )
 
         predict2str = out2rle(predict_original_size)
         for i, sample in enumerate(predict):

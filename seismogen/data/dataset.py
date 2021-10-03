@@ -9,6 +9,7 @@ import pandas as pd
 import torch
 from sklearn.model_selection import train_test_split
 
+from seismogen.data.letterbox import letterbox_forward
 from seismogen.data.rle_utils import rle2mask
 
 
@@ -18,6 +19,8 @@ class SegDataset(torch.utils.data.Dataset):
         image_dir: str,
         train_meta: str,
         num_channels: int = 3,
+        size: int = 224,
+        letterbox: bool = False,
         augmentation: Optional[A.Compose] = None,
         transform: Optional[A.Compose] = None,
         split: str = "train",
@@ -30,6 +33,9 @@ class SegDataset(torch.utils.data.Dataset):
         )
         assert num_channels in [1, 3], f"Num channels should be in [1, 3], got {num_channels}"
         self.num_channels = num_channels
+
+        self.size = size
+        self.letterbox = letterbox
         self.augmentation = augmentation
         self.transform = transform
 
@@ -71,6 +77,14 @@ class SegDataset(torch.utils.data.Dataset):
         )
         ce_mask = np.concatenate(ce_mask, -1) if self.train else None
         # np.sum(ce_mask, axis=0, dtype=np.float32)[:, :, None]
+
+        if self.letterbox:
+            img, pad = letterbox_forward(img, size=self.size)
+            if ce_mask is not None:
+                ce_mask, _ = letterbox_forward(ce_mask, size=self.size, mask=True)
+        else:
+            pad = None
+
         if self.augmentation is not None:
             img_mask_dict = self.augmentation(image=img, mask=ce_mask)
             img, ce_mask = img_mask_dict["image"], img_mask_dict["mask"]
@@ -84,6 +98,7 @@ class SegDataset(torch.utils.data.Dataset):
         result = {
             "image_shape": torch.tensor(img_shape),
             "image_name": img_name,
+            "pad": str(pad),
             "image": torch.tensor(img["image"]).transpose(-1, 0).transpose(-1, -2).float(),
             "mask": torch.tensor(img["mask"]).transpose(-1, 0).transpose(-1, -2).float() if self.train else [],
         }

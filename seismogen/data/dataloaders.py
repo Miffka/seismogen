@@ -28,6 +28,8 @@ def init_dataloaders(args: argparse.ArgumentParser) -> Dict[str, torch.utils.dat
                 train_meta=None
                 if split == "test"
                 else osp.join(args.data_dir, "Lab1", "data", f"{dir_id}_seg_track{track_num}.csv"),
+                size=args.size,
+                letterbox=args.letterbox,
                 augmentation=None
                 if split == "test"
                 else get_augmentations(

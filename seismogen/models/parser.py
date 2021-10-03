@@ -18,6 +18,7 @@ def get_parser():
     # Dataloader params
     parser.add_argument("--data_dir", default=osp.join(system_config.data_dir, "raw"))
     parser.add_argument("--size", type=int, default=224)
+    parser.add_argument("--letterbox", action="store_true")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--augmentation_intensity", default=None)
