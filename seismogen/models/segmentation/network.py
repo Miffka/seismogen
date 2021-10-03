@@ -12,5 +12,11 @@ def load_net(args: argparse.Namespace) -> torch.nn.Module:
         in_channels=args.num_channels,
         classes=7,
     )
+    state = {}
 
-    return model
+    if args.weights is not None:
+        state = torch.load(args.weights, map_location="cpu")
+        model.load_state_dict(state["state_dict"])
+        del state["state_dict"]
+
+    return model, state

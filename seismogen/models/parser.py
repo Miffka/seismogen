@@ -13,6 +13,7 @@ def get_parser():
 
     # Common model & dataloader params
     parser.add_argument("--num_channels", type=int, default=3)
+    parser.add_argument("--weights", type=str, default=None)
 
     # Dataloader params
     parser.add_argument("--data_dir", default=osp.join(system_config.data_dir, "raw"))
@@ -25,6 +26,9 @@ def get_parser():
 
     # Seg dataloader params
     parser.add_argument("--track_num", type=int, default=1)
+    parser.add_argument("--sample_type", default="random")
+    parser.add_argument("--num_samples", type=int, default=400)
+    parser.add_argument("--balancing_coeff", default='{"track1": 1.0, "track2": 1.0}')
 
     # Seg model params
     parser.add_argument("--seg_model_arch", default="Unet")

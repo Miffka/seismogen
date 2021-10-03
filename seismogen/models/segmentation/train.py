@@ -101,13 +101,12 @@ def train_model():
     parser = get_parser()
     args = parser.parse_args()
 
-    writer = SummaryWriter(osp.join(system_config.log_dir, args.task_name))
+    writer = SummaryWriter(osp.join(system_config.log_dir + str(args.track_num), args.task_name))
 
     dataloaders = init_dataloaders(args)
 
     fix_seeds(args.random_state)
-    model = load_net(args)
-    state = {}
+    model, state = load_net(args)
 
     model.to(torch_config.device)
 

@@ -38,6 +38,7 @@ class SegDataset(torch.utils.data.Dataset):
         self.train = self.split in ["train", "val"]
 
         self.get_train_val_split(val_size)
+        self.track_num = osp.basename(image_dir).split(".")[0].split("_")[-1]
 
     def get_train_val_split(self, val_size: float):
         if self.split in ["train", "val"]:
