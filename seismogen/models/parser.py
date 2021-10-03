@@ -21,6 +21,7 @@ def get_parser():
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--augmentation_intensity", default=None)
     parser.add_argument("--gauss_limit", type=float, default=0.0)
+    parser.add_argument("--val_size", type=float, default=0.2)
 
     # Seg dataloader params
     parser.add_argument("--track_num", type=int, default=1)

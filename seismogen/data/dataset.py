@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import torch
+from sklearn.model_selection import train_test_split
 
 from seismogen.data.rle_utils import rle2mask
 
@@ -19,10 +20,11 @@ class SegDataset(torch.utils.data.Dataset):
         num_channels: int = 3,
         augmentation: Optional[A.Compose] = None,
         transform: Optional[A.Compose] = None,
-        train: bool = True,
+        split: str = "train",
+        val_size: float = 0.2,
     ):
         self.image_dir = image_dir
-        self.image_names = os.listdir(self.image_dir)
+        self.image_names = sorted(os.listdir(self.image_dir))
         self.train_meta = (
             pd.read_csv(train_meta).drop_duplicates(["ImageId", "ClassId"]) if train_meta is not None else None
         )
@@ -31,7 +33,19 @@ class SegDataset(torch.utils.data.Dataset):
         self.augmentation = augmentation
         self.transform = transform
 
-        self.train = train
+        assert split in ["train", "val", "test"], f"Split value should be in ['train', 'val', 'test'], got {split}"
+        self.split = split
+        self.train = self.split in ["train", "val"]
+
+        self.get_train_val_split(val_size)
+
+    def get_train_val_split(self, val_size: float):
+        if self.split in ["train", "val"]:
+            train_imgs, val_imgs = train_test_split(self.image_names, test_size=val_size, random_state=24)
+            if self.split == "train":
+                self.image_names = train_imgs
+            else:
+                self.image_names = val_imgs
 
     def __len__(self) -> int:
         return len(self.image_names)

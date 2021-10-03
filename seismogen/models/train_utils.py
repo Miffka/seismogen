@@ -41,7 +41,7 @@ def define_scheduler(
 
     if lr_scheduler == "ReduceLROnPlateau":
         lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, "max", patience=args.patience, factor=args.gamma_factor, verbose=True
+            optimizer, "min", patience=args.patience, factor=args.gamma_factor, verbose=True
         )
     elif lr_scheduler is None:
         pass
