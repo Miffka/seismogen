@@ -1,6 +1,6 @@
 import os
 import os.path as osp
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import torch
 import tqdm
@@ -22,12 +22,13 @@ def eval_model(
     model: torch.nn.Module,
     val_dataloader: torch.utils.data.DataLoader,
     epoch_num: int,
+    loss_weights: Optional[List[float]] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
     fp16: bool = False,
     writer: Optional[SummaryWriter] = None,
 ):
     total_samples = len(val_dataloader)
     loss_f = torch.nn.BCEWithLogitsLoss(
-        pos_weight=torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]).to(torch_config.device).reshape(1, 7, 1, 1)
+        pos_weight=torch.tensor(loss_weights).to(torch_config.device).reshape(1, 7, 1, 1)
     )
     loss_d = DiceLoss(torch_config.device)
 
@@ -62,6 +63,7 @@ def train_one_epoch(
     dataloaders: Dict[str, torch.utils.data.DataLoader],
     optimizer: torch.optim.Optimizer,
     epoch_num: int,
+    loss_weights: Optional[List[float]] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
     fp16_scaler: Optional[torch.cuda.amp.GradScaler] = None,
     scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
     writer: Optional[SummaryWriter] = None,
@@ -69,7 +71,7 @@ def train_one_epoch(
 
     total_samples = len(dataloaders["train"])
     loss_f = torch.nn.BCEWithLogitsLoss(
-        pos_weight=torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]).to(torch_config.device).reshape(1, 7, 1, 1)
+        pos_weight=torch.tensor(loss_weights).to(torch_config.device).reshape(1, 7, 1, 1)
     )
     loss_d = DiceLoss(torch_config.device)
 
@@ -99,7 +101,9 @@ def train_one_epoch(
             writer.add_scalar("Loss BCE", round(loss_f_value.item(), 3), global_step=global_step)
             writer.add_scalar("Loss DICE", round(loss_d_value.item(), 3), global_step=global_step)
 
-    val_loss_dict = eval_model(model, dataloaders["val"], epoch_num, fp16=fp16_scaler is not None, writer=writer)
+    val_loss_dict = eval_model(
+        model, dataloaders["val"], epoch_num, loss_weights=loss_weights, fp16=fp16_scaler is not None, writer=writer
+    )
 
     if scheduler is not None:
         scheduler.step(val_loss_dict["Loss DICE_val"])
@@ -129,6 +133,8 @@ def train_model():
     save_dir = osp.join(system_config.model_dir, args.task_name)
     os.makedirs(save_dir, exist_ok=True)
 
+    assert len(args.loss_weights) == 7
+
     if args.fp16:
         fp16_scaler = torch.cuda.amp.GradScaler()
     else:
@@ -137,7 +143,13 @@ def train_model():
     fix_seeds(args.random_state)
     for epoch_num in range(init_epoch, init_epoch + args.epochs):
         current_metric = train_one_epoch(
-            model, dataloaders, optimizer, epoch_num, fp16_scaler=fp16_scaler, writer=writer
+            model,
+            dataloaders,
+            optimizer,
+            epoch_num,
+            loss_weights=args.loss_weights,
+            fp16_scaler=fp16_scaler,
+            writer=writer,
         )
         state = {
             "state_dict": model.state_dict(),

@@ -55,5 +55,6 @@ def get_parser():
 
     # Train params
     parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--loss_weights", type=float, nargs="+", default=[1.0] * 7)
 
     return parser
