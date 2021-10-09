@@ -47,7 +47,7 @@ class SegDataset(torch.utils.data.Dataset):
         self.track_num = osp.basename(image_dir).split(".")[0].split("_")[-1]
 
     def get_train_val_split(self, val_size: float):
-        if self.split in ["train", "val"]:
+        if self.split in ["train", "val"] and val_size > 0:
             train_imgs, val_imgs = train_test_split(self.image_names, test_size=val_size, random_state=24)
             if self.split == "train":
                 self.image_names = train_imgs
@@ -91,16 +91,17 @@ class SegDataset(torch.utils.data.Dataset):
 
         if self.transform is not None:
             if self.train:
-                img = self.transform(image=(img), mask=(ce_mask))
+                img_mask_dict = self.transform(image=(img), mask=(ce_mask))
+                img, ce_mask = img_mask_dict["image"], img_mask_dict["mask"]
             else:
-                img = self.transform(image=(img))
+                img = self.transform(image=(img))["image"]
 
         result = {
             "image_shape": torch.tensor(img_shape),
             "image_name": img_name,
             "pad": str(pad),
-            "image": torch.tensor(img["image"]).transpose(-1, 0).transpose(-1, -2).float(),
-            "mask": torch.tensor(img["mask"]).transpose(-1, 0).transpose(-1, -2).float() if self.train else [],
+            "image": torch.tensor(img).transpose(-1, 0).transpose(-1, -2).float(),
+            "mask": torch.tensor(ce_mask).transpose(-1, 0).transpose(-1, -2).float() if self.train else [],
         }
 
         return result

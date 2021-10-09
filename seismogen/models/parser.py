@@ -37,6 +37,11 @@ def get_parser():
     parser.add_argument("--backbone", default="resnet18")
     parser.add_argument("--pretrained_weights", default="imagenet")
 
+    # Prediction params
+    parser.add_argument(
+        "--tta_type", default=None, help="type of tta importable from pytorch_toolbelt.inference.tta module"
+    )
+
     # Optimizer params
     parser.add_argument("--optimizer_type", default="adamw")
     parser.add_argument("--lr", type=float, default=2e-4)

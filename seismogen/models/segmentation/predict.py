@@ -1,6 +1,9 @@
+from typing import Optional
+
 import pandas as pd
 import torch
 import tqdm
+from pytorch_toolbelt.inference import tta  # noqa F401
 
 from seismogen.data.letterbox import letterbox_backward
 from seismogen.data.rle_utils import out2rle
@@ -9,7 +12,10 @@ from seismogen.torch_config import torch_config
 
 @torch.no_grad()
 def get_prediction(
-    model: torch.nn.Module, test_loader: torch.utils.data.DataLoader, fp16: bool = False
+    model: torch.nn.Module,
+    test_loader: torch.utils.data.DataLoader,
+    fp16: bool = False,
+    tta_type: Optional[str] = None,
 ) -> pd.DataFrame:
 
     all_predicts = []
@@ -17,7 +23,10 @@ def get_prediction(
     for batch_idx, batch in tqdm.tqdm(enumerate(test_loader), desc="Predict", total=len(test_loader)):
         with torch.no_grad():
             with torch.cuda.amp.autocast(enabled=fp16):
-                predict = model(batch["image"].to(torch_config.device).detach())
+                if tta_type is None:
+                    predict = model(batch["image"].to(torch_config.device).detach())
+                else:
+                    predict = eval(f"tta.{tta_type}")(model, batch["image"].to(torch_config.device))
 
         predict_original_size = []
         for k, _pred in enumerate(predict):
