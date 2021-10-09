@@ -41,6 +41,7 @@ def get_parser():
     parser.add_argument(
         "--tta_type", default=None, help="type of tta importable from pytorch_toolbelt.inference.tta module"
     )
+    parser.add_argument("--fill_holes", action="store_true")
 
     # Optimizer params
     parser.add_argument("--optimizer_type", default="adamw")

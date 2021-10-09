@@ -4,6 +4,7 @@ import pandas as pd
 import torch
 import tqdm
 from pytorch_toolbelt.inference import tta  # noqa F401
+from scipy.ndimage.morphology import binary_fill_holes
 
 from seismogen.data.letterbox import letterbox_backward
 from seismogen.data.rle_utils import out2rle
@@ -16,6 +17,7 @@ def get_prediction(
     test_loader: torch.utils.data.DataLoader,
     fp16: bool = False,
     tta_type: Optional[str] = None,
+    fill_holes: bool = False,
 ) -> pd.DataFrame:
 
     all_predicts = []
@@ -38,6 +40,12 @@ def get_prediction(
                         0
                     ]
                 )
+
+        if fill_holes:
+            new_pred = []
+            for pred_ in predict_original_size:
+                new_pred.append(binary_fill_holes(pred_ > 0.5).astype(float))
+            predict_original_size = new_pred
 
         predict2str = out2rle(predict_original_size)
         for i, sample in enumerate(predict):
