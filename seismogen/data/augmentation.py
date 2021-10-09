@@ -12,7 +12,14 @@ def get_augmentations(
     fix_seeds(24)
     crop_limits = (int(resize * 0.85), resize)
 
-    if augmentation_intensity == "light":
+    if augmentation_intensity == "slight":
+        p_augment = 0.15
+        p_scale = 0.15
+        p_blur = 0.05
+        p_dropout = 0.05
+        p_flip = 0.15
+        p_noise = 0.15
+    elif augmentation_intensity == "light":
         p_augment = 0.25
         p_scale = 0.2
         p_blur = 0.1
