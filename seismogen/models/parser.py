@@ -14,6 +14,7 @@ def get_parser():
     # Common model & dataloader params
     parser.add_argument("--num_channels", type=int, default=3)
     parser.add_argument("--weights", type=str, default=None)
+    parser.add_argument("--fp16", action="store_true")
 
     # Dataloader params
     parser.add_argument("--data_dir", default=osp.join(system_config.data_dir, "raw"))

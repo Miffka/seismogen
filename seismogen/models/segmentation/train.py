@@ -22,6 +22,7 @@ def eval_model(
     model: torch.nn.Module,
     val_dataloader: torch.utils.data.DataLoader,
     epoch_num: int,
+    fp16: bool = False,
     writer: Optional[SummaryWriter] = None,
 ):
     total_samples = len(val_dataloader)
@@ -34,10 +35,12 @@ def eval_model(
     loss_d_value = 0
 
     for sample in tqdm.tqdm(val_dataloader, desc="Validate", total=total_samples):
-        predict = model(sample["image"].to(torch_config.device))
 
-        loss_f_value += loss_f(predict, sample["mask"].to(torch_config.device))
-        loss_d_value += loss_d(predict, sample["mask"].to(torch_config.device)).mean()
+        with torch.cuda.amp.autocast(enabled=fp16):
+            predict = model(sample["image"].to(torch_config.device))
+
+            loss_f_value += loss_f(predict, sample["mask"].to(torch_config.device))
+            loss_d_value += loss_d(predict, sample["mask"].to(torch_config.device)).mean()
 
     loss = loss_f_value + loss_d_value
 
@@ -59,6 +62,7 @@ def train_one_epoch(
     dataloaders: Dict[str, torch.utils.data.DataLoader],
     optimizer: torch.optim.Optimizer,
     epoch_num: int,
+    fp16_scaler: Optional[torch.cuda.amp.GradScaler] = None,
     scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
     writer: Optional[SummaryWriter] = None,
 ) -> torch.nn.Module:
@@ -73,14 +77,20 @@ def train_one_epoch(
 
     for i, sample in progress_bar:
         optimizer.zero_grad()
-        predict = model(sample["image"].to(torch_config.device))
+        with torch.cuda.amp.autocast(enabled=fp16_scaler is not None):
+            predict = model(sample["image"].to(torch_config.device))
 
-        loss_f_value = loss_f(predict, sample["mask"].to(torch_config.device))
-        loss_d_value = loss_d(predict, sample["mask"].to(torch_config.device)).mean()
-        loss = loss_f_value + loss_d_value
-        loss.backward()
+            loss_f_value = loss_f(predict, sample["mask"].to(torch_config.device))
+            loss_d_value = loss_d(predict, sample["mask"].to(torch_config.device)).mean()
+            loss = loss_f_value + loss_d_value
 
-        optimizer.step()
+        if fp16_scaler is not None:
+            fp16_scaler.scale(loss).backward()
+            fp16_scaler.step(optimizer)
+            fp16_scaler.update()
+        else:
+            loss.backward()
+            optimizer.step()
 
         progress_bar.set_description(f"Epoch: {epoch_num} Loss: {round(loss.item(), 3)}")
         if writer is not None:
@@ -89,7 +99,7 @@ def train_one_epoch(
             writer.add_scalar("Loss BCE", round(loss_f_value.item(), 3), global_step=global_step)
             writer.add_scalar("Loss DICE", round(loss_d_value.item(), 3), global_step=global_step)
 
-    val_loss_dict = eval_model(model, dataloaders["val"], epoch_num, writer=writer)
+    val_loss_dict = eval_model(model, dataloaders["val"], epoch_num, fp16=fp16_scaler is not None, writer=writer)
 
     if scheduler is not None:
         scheduler.step(val_loss_dict["Loss DICE_val"])
@@ -119,9 +129,16 @@ def train_model():
     save_dir = osp.join(system_config.model_dir, args.task_name)
     os.makedirs(save_dir, exist_ok=True)
 
+    if args.fp16:
+        fp16_scaler = torch.cuda.amp.GradScaler()
+    else:
+        fp16_scaler = None
+
     fix_seeds(args.random_state)
     for epoch_num in range(init_epoch, init_epoch + args.epochs):
-        current_metric = train_one_epoch(model, dataloaders, optimizer, epoch_num, writer=writer)
+        current_metric = train_one_epoch(
+            model, dataloaders, optimizer, epoch_num, fp16_scaler=fp16_scaler, writer=writer
+        )
         state = {
             "state_dict": model.state_dict(),
             "epoch": epoch_num,
@@ -136,7 +153,7 @@ def train_model():
     state = torch.load(osp.join(save_dir, "best.pth"))
     model.load_state_dict(state["state_dict"])
 
-    prediction = get_prediction(model, dataloaders["test"])
+    prediction = get_prediction(model, dataloaders["test"], fp16=args.fp16)
     prediction.to_csv(osp.join(save_dir, f"{args.task_name}.csv"))
 
 
