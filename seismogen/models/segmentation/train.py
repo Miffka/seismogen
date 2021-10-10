@@ -194,7 +194,14 @@ def train_model():
     state = torch.load(osp.join(save_dir, "best.pth"))
     model.load_state_dict(state["state_dict"])
 
-    prediction = get_prediction(model, dataloaders["test"], fp16=args.fp16, tta_type=args.tta_type)
+    prediction = get_prediction(
+        model,
+        dataloaders["test"],
+        fp16=args.fp16,
+        tta_type=args.tta_type,
+        fill_holes=args.fill_holes,
+        biggest_only=args.biggest_only,
+    )
     prediction.to_csv(osp.join(save_dir, f"{args.task_name}.csv"))
 
 
