@@ -54,6 +54,7 @@ class SegDataset(torch.utils.data.Dataset):
     def get_train_val_split(self, val_size: float):
         if self.split in ["train", "val"] and val_size > 0:
             train_imgs, val_imgs = train_test_split(self.image_names, test_size=val_size, random_state=24)
+            self.train_imgs = train_imgs
             if self.split == "train":
                 self.image_names = train_imgs
             else:
@@ -62,28 +63,30 @@ class SegDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         return len(self.image_names)
 
-    def read_image(self, img_name: str) -> np.ndarray:
-        path = osp.join(self.image_dir, img_name)
+    def read_image(self, img_name: str, image_dir: str) -> np.ndarray:
+        path = osp.join(image_dir, img_name)
 
         img = cv2.imread(path)
         if self.num_channels == 1:
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            img = np.expand_dims(img[:, :, 0], axis=2)
         assert img.ndim == 3, f"Image should have 3 dimensions, got {img.ndim}"
 
         return img
 
-    def get_gt_image_and_mask(self, img_name: str) -> Tuple[np.ndarray]:
-        img = self.read_image(img_name)
+    def get_gt_image_and_mask(
+        self, img_name: str, meta_df: pd.DataFrame, image_dir: str, force_load_mask: bool = False
+    ) -> Tuple[np.ndarray]:
+        img = self.read_image(img_name, image_dir=image_dir)
 
         ce_mask = (
             [
                 (1) * rle2mask(rle, shape=(img.shape[1], img.shape[0]))[:, :, None]
-                for i, rle in enumerate(self.train_meta[self.train_meta["ImageId"] == img_name]["EncodedPixels"])
+                for i, rle in enumerate(meta_df[meta_df["ImageId"] == img_name]["EncodedPixels"])
             ]
-            if self.train
+            if self.train or force_load_mask
             else None
         )
-        ce_mask = np.concatenate(ce_mask, -1) if self.train else None
+        ce_mask = np.concatenate(ce_mask, -1) if self.train or force_load_mask else None
         if self.mode == "multiclass" and ce_mask is not None:
             ce_mask = (ce_mask * np.arange(1, 8)[None, None, :]).max(axis=2).astype(np.long)
 
@@ -113,7 +116,7 @@ class SegDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index: int) -> Dict[str, Union[torch.Tensor, str]]:
         img_name = self.image_names[index]  # ['ImageId']
-        img, ce_mask = self.get_gt_image_and_mask(img_name)
+        img, ce_mask = self.get_gt_image_and_mask(img_name, self.train_meta, self.image_dir)
         img_shape = (img.shape[0], img.shape[1])
         img, ce_mask, pad = self.apply_aug_transform(img, ce_mask)
 
@@ -129,15 +132,81 @@ class SegDataset(torch.utils.data.Dataset):
         return result
 
 
-def NearestSegDataset(SegDataset):
-    def __init__(self, *args, additional_meta: str, **kwargs):
+class NearestSegDataset(SegDataset):
+    def __init__(
+        self, additional_meta: Optional[str] = None, additional_image_dir: Optional[str] = None, *args, **kwargs
+    ):
         super().__init__(*args, **kwargs)
-        self.additional_meta_df = (
-            pd.read_csv(additional_meta).drop_duplicates(["ImageId", "ClassId"])
-            if additional_meta is not None
-            else None
-        )
+
+        assert self.mode == "multiclass", f"NearestSegDataset requires mode 'multiclass', got mode {self.mode}"
+        assert (
+            self.num_channels == 1
+        ), f"NearestSegDataset requires num_channels 1, got num_channels {self.num_channels}"
+
+        self.additional_meta_df = self.prepare_additional_meta(additional_meta)
+        self.additional_image_dir = self.select_additional_image_dir(additional_image_dir)
+        self.gt_images_df = self.prepare_gt_images_df(self.additional_meta_df)
+
+    def prepare_additional_meta(self, additional_meta: str) -> pd.DataFrame:
+        if self.split in ["train", "val"]:
+            additional_meta_df = self.train_meta[np.isin(self.train_meta["ImageId"], self.train_imgs)]
+        else:
+            additional_meta_df = pd.read_csv(additional_meta).drop_duplicates(["ImageId", "ClassId"])
+        return additional_meta_df
+
+    def select_additional_image_dir(self, additional_image_dir: str) -> str:
+        if self.split in ["train", "val"]:
+            additional_image_dir = self.image_dir
+        else:
+            additional_image_dir = additional_image_dir
+
+        return additional_image_dir
+
+    def prepare_gt_images_df(self, train_df: pd.DataFrame) -> pd.DataFrame:
+        gt_images = train_df[["ImageId"]].drop_duplicates().reset_index(drop=True)
+        gt_images["prefix"] = gt_images["ImageId"].map(lambda x: nearest.get_prefix_and_num(x)[0])
+        gt_images["num"] = gt_images["ImageId"].map(lambda x: nearest.get_prefix_and_num(x)[1])
+
+        return gt_images
+
+    def construct_channels(self, curr_img: np.ndarray, gt_img: np.ndarray, gt_ce_mask: np.ndarray) -> np.ndarray:
+        diff_img = curr_img.astype(np.float) - gt_img.astype(np.float)
+        diff_img = ((diff_img - diff_img.min()) / diff_img.ptp() * 255).astype(np.uint8)
+        gt_img = ((gt_img - gt_img.min()) / gt_img.ptp() * 255).astype(np.uint8)
+        gt_ce_mask = ((gt_ce_mask - gt_ce_mask.min()) / gt_ce_mask.ptp() * 255).astype(np.uint8)
+        out_img = np.concatenate((gt_img, diff_img, gt_ce_mask), axis=2)
+        return out_img
 
     def __getitem__(self, index: int) -> Dict[str, Union[torch.Tensor, str]]:
-        # TODO add forward for this case
-        pass
+        img_name = self.image_names[index]  # ['ImageId']
+        curr_img, curr_ce_mask = self.get_gt_image_and_mask(img_name, meta_df=self.train_meta, image_dir=self.image_dir)
+        img_shape = (curr_img.shape[0], curr_img.shape[1])
+
+        if self.split == "train":
+            min_distance = min(nearest.sample_min_distance(), 20)
+        else:
+            min_distance = 0
+        gt_img_name = nearest.find_nearest_gt(img_name, gt_images=self.gt_images_df, min_distance=min_distance)
+        gt_img, gt_ce_mask = self.get_gt_image_and_mask(
+            gt_img_name, meta_df=self.additional_meta_df, image_dir=self.additional_image_dir, force_load_mask=True
+        )
+
+        gt_img = np.expand_dims(cv2.resize(gt_img, dsize=img_shape[::-1], interpolation=cv2.INTER_CUBIC), axis=2)
+        gt_ce_mask = np.expand_dims(
+            cv2.resize(gt_ce_mask, dsize=gt_img.shape[:2][::-1], interpolation=cv2.INTER_NEAREST), axis=2
+        )
+        img = self.construct_channels(curr_img, gt_img, gt_ce_mask)
+
+        img, ce_mask, pad = self.apply_aug_transform(img, curr_ce_mask)
+
+        result = {
+            "image_shape": torch.tensor(img_shape),
+            "image_name": img_name,
+            "gt_image_name": gt_img_name,
+            "pad": str(pad),
+            "image": torch.tensor(img).transpose(-1, 0).transpose(-1, -2).float(),
+            "mask": torch.tensor(ce_mask, dtype=self.mask_dtype).transpose(-1, 0).transpose(-1, -2)
+            if self.train
+            else [],
+        }
+        return result

@@ -169,7 +169,7 @@ def train_model():
         fp16_scaler = None
 
     fix_seeds(args.random_state)
-    for epoch_num in range(init_epoch, init_epoch + args.epochs):
+    for epoch_num in tqdm.tqdm(range(init_epoch, init_epoch + args.epochs), desc="Epochs"):
         current_metric = train_one_epoch(
             model,
             dataloaders,

@@ -5,7 +5,7 @@ from typing import Dict
 import torch
 
 from seismogen.data.augmentation import get_augmentations
-from seismogen.data.dataset import SegDataset
+from seismogen.data.dataset import NearestSegDataset, SegDataset
 from seismogen.data.sampler import ImbalancedDatasetSampler, UndersampledDatasetSampler
 from seismogen.data.transforms import get_transforms
 
@@ -23,24 +23,45 @@ def init_dataloaders(args: argparse.ArgumentParser) -> Dict[str, torch.utils.dat
         mask_mode = "multiclass" if args.num_classes == 8 else "multilabel"
         split_datasets = []
         for track_num in range(1, args.track_num + 1):
-
-            dataset = SegDataset(
-                image_dir=osp.join(args.data_dir, "Lab1", "data", f"{dir_id}_images_track{track_num}"),
-                train_meta=None
+            train_meta = (
+                None
                 if split == "test"
-                else osp.join(args.data_dir, "Lab1", "data", f"{dir_id}_seg_track{track_num}.csv"),
-                size=args.size,
-                mode=mask_mode,
-                letterbox=args.letterbox,
-                augmentation=None
+                else osp.join(args.data_dir, "Lab1", "data", f"{dir_id}_seg_track{track_num}.csv")
+            )
+            augmentation = (
+                None
                 if split == "test"
                 else get_augmentations(
                     resize=args.size, augmentation_intensity=args.augmentation_intensity, gauss_limit=args.gauss_limit
-                ),
-                transform=get_transforms(size=args.size, num_channels=args.num_channels),
+                )
+            )
+            num_channels = 1 if args.nearest else args.num_channels
+
+            kwargs = dict(
+                image_dir=osp.join(args.data_dir, "Lab1", "data", f"{dir_id}_images_track{track_num}"),
+                train_meta=train_meta,
+                num_channels=num_channels,
+                size=args.size,
+                mode=mask_mode,
+                letterbox=args.letterbox,
+                augmentation=augmentation,
+                transform=get_transforms(size=args.size, num_channels=args.num_channels, nearest=args.nearest),
                 split=split,
                 val_size=args.val_size,
             )
+
+            if args.nearest:
+                ds_class = NearestSegDataset
+                kwargs.update(
+                    dict(
+                        additional_meta=osp.join(args.data_dir, "Lab1", "data", f"train_seg_track{track_num}.csv"),
+                        additional_image_dir=osp.join(args.data_dir, "Lab1", "data", f"train_images_track{track_num}"),
+                    )
+                )
+            else:
+                ds_class = SegDataset
+
+            dataset = ds_class(**kwargs)
 
             if args.track_num == 2 and track_num < args.track_num and split != "train":
                 continue

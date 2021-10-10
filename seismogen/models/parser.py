@@ -60,5 +60,10 @@ def get_parser():
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--loss_weights", type=float, nargs="+", default=None)
     parser.add_argument("--use_focal", action="store_true")
+    parser.add_argument(
+        "--nearest",
+        action="store_true",
+        help="whether to construct images as [img, diff_to_nearest_train, nearest_train_mask]",
+    )
 
     return parser
