@@ -10,7 +10,7 @@ def load_net(args: argparse.Namespace) -> torch.nn.Module:
         encoder_name=args.backbone,
         encoder_weights=args.pretrained_weights,
         in_channels=args.num_channels,
-        classes=7,
+        classes=args.num_classes,
     )
     state = {}
 

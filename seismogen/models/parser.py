@@ -36,6 +36,7 @@ def get_parser():
     parser.add_argument("--seg_model_arch", default="Unet")
     parser.add_argument("--backbone", default="resnet18")
     parser.add_argument("--pretrained_weights", default="imagenet")
+    parser.add_argument("--num_classes", type=int, default=7)
 
     # Prediction params
     parser.add_argument(
@@ -56,6 +57,7 @@ def get_parser():
 
     # Train params
     parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--loss_weights", type=float, nargs="+", default=[1.0] * 7)
+    parser.add_argument("--loss_weights", type=float, nargs="+", default=None)
+    parser.add_argument("--use_focal", action="store_true")
 
     return parser

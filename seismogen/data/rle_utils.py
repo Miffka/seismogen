@@ -45,7 +45,6 @@ def out2rle(outputs: torch.Tensor) -> List[str]:
     except Exception:
         prediction = outputs
     for j, sample in enumerate(prediction):
-        for val in range(0, 7):
-            ch_pred = sample[val]
-            rles.append(mask2rle(ch_pred.T > 0.5))
+        for class_slice in sample:
+            rles.append(mask2rle(class_slice.T > 0.5))
     return rles

@@ -20,6 +20,7 @@ def init_dataloaders(args: argparse.ArgumentParser) -> Dict[str, torch.utils.dat
         else:
             dir_id = "train"
 
+        mask_mode = "multiclass" if args.num_classes == 8 else "multilabel"
         split_datasets = []
         for track_num in range(1, args.track_num + 1):
 
@@ -29,6 +30,7 @@ def init_dataloaders(args: argparse.ArgumentParser) -> Dict[str, torch.utils.dat
                 if split == "test"
                 else osp.join(args.data_dir, "Lab1", "data", f"{dir_id}_seg_track{track_num}.csv"),
                 size=args.size,
+                mode=mask_mode,
                 letterbox=args.letterbox,
                 augmentation=None
                 if split == "test"

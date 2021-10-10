@@ -1,9 +1,10 @@
 import os
 import os.path as osp
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import tqdm
+from pytorch_toolbelt import losses
 from torch.utils.tensorboard import SummaryWriter
 
 from seismogen.config import system_config
@@ -17,24 +18,44 @@ from seismogen.models.train_utils import define_optimizer, define_scheduler
 from seismogen.torch_config import torch_config
 
 
+def define_losses(
+    num_classes: int, use_focal: bool = False, loss_weights: Optional[List[float]] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+) -> Tuple[torch.nn.Module]:
+
+    assert num_classes in {7, 8}
+    if num_classes == 7:
+        loss_f = torch.nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor(loss_weights).to(torch_config.device).reshape(1, num_classes, 1, 1)
+        )
+        loss_d = DiceLoss(torch_config.device)
+    else:
+        if use_focal:
+            loss_f = losses.FocalLoss()
+        else:
+            loss_f = torch.nn.CrossEntropyLoss()
+
+        loss_d = DiceLoss(torch_config.device)
+
+    return loss_f, loss_d
+
+
 @torch.no_grad()
 def eval_model(
     model: torch.nn.Module,
     val_dataloader: torch.utils.data.DataLoader,
     epoch_num: int,
     loss_weights: Optional[List[float]] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    use_focal: bool = False,
     fp16: bool = False,
     writer: Optional[SummaryWriter] = None,
 ):
-    total_samples = len(val_dataloader)
-    loss_f = torch.nn.BCEWithLogitsLoss(
-        pos_weight=torch.tensor(loss_weights).to(torch_config.device).reshape(1, 7, 1, 1)
-    )
-    loss_d = DiceLoss(torch_config.device)
+    num_classes = model.segmentation_head[0].out_channels
+    loss_f, loss_d = define_losses(num_classes, use_focal=use_focal, loss_weights=loss_weights)
 
     loss_f_value = 0
     loss_d_value = 0
 
+    total_samples = len(val_dataloader)
     for sample in tqdm.tqdm(val_dataloader, desc="Validate", total=total_samples):
 
         with torch.cuda.amp.autocast(enabled=fp16):
@@ -64,17 +85,16 @@ def train_one_epoch(
     optimizer: torch.optim.Optimizer,
     epoch_num: int,
     loss_weights: Optional[List[float]] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    use_focal: bool = False,
     fp16_scaler: Optional[torch.cuda.amp.GradScaler] = None,
     scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
     writer: Optional[SummaryWriter] = None,
 ) -> torch.nn.Module:
 
-    total_samples = len(dataloaders["train"])
-    loss_f = torch.nn.BCEWithLogitsLoss(
-        pos_weight=torch.tensor(loss_weights).to(torch_config.device).reshape(1, 7, 1, 1)
-    )
-    loss_d = DiceLoss(torch_config.device)
+    num_classes = model.segmentation_head[0].out_channels
+    loss_f, loss_d = define_losses(num_classes, use_focal=use_focal, loss_weights=loss_weights)
 
+    total_samples = len(dataloaders["train"])
     progress_bar = tqdm.tqdm(enumerate(dataloaders["train"]), desc=f"Train epoch {epoch_num}", total=total_samples)
 
     for i, sample in progress_bar:
@@ -102,7 +122,13 @@ def train_one_epoch(
             writer.add_scalar("Loss DICE", round(loss_d_value.item(), 3), global_step=global_step)
 
     val_loss_dict = eval_model(
-        model, dataloaders["val"], epoch_num, loss_weights=loss_weights, fp16=fp16_scaler is not None, writer=writer
+        model,
+        dataloaders["val"],
+        epoch_num,
+        loss_weights=loss_weights,
+        use_focal=use_focal,
+        fp16=fp16_scaler is not None,
+        writer=writer,
     )
 
     if scheduler is not None:
@@ -133,7 +159,9 @@ def train_model():
     save_dir = osp.join(system_config.model_dir, args.task_name)
     os.makedirs(save_dir, exist_ok=True)
 
-    assert len(args.loss_weights) == 7
+    if args.loss_weights is None:
+        args.loss_weights = [1.0] * args.num_classes
+    assert len(args.loss_weights) == args.num_classes
 
     if args.fp16:
         fp16_scaler = torch.cuda.amp.GradScaler()
@@ -148,6 +176,7 @@ def train_model():
             optimizer,
             epoch_num,
             loss_weights=args.loss_weights,
+            use_focal=args.use_focal,
             fp16_scaler=fp16_scaler,
             writer=writer,
         )

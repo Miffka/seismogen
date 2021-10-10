@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 from sklearn.model_selection import train_test_split
 
-from seismogen.data import nearest
+from seismogen.data import nearest  # noqa F401
 from seismogen.data.letterbox import letterbox_forward
 from seismogen.data.rle_utils import rle2mask
 
@@ -21,6 +21,7 @@ class SegDataset(torch.utils.data.Dataset):
         train_meta: str,
         num_channels: int = 3,
         size: int = 224,
+        mode: str = "multilabel",
         letterbox: bool = False,
         augmentation: Optional[A.Compose] = None,
         transform: Optional[A.Compose] = None,
@@ -36,6 +37,9 @@ class SegDataset(torch.utils.data.Dataset):
         self.num_channels = num_channels
 
         self.size = size
+        assert mode in {"multiclass", "multilabel"}
+        self.mode = mode
+        self.mask_dtype = torch.float if mode == "multilabel" else torch.long
         self.letterbox = letterbox
         self.augmentation = augmentation
         self.transform = transform
@@ -80,6 +84,8 @@ class SegDataset(torch.utils.data.Dataset):
             else None
         )
         ce_mask = np.concatenate(ce_mask, -1) if self.train else None
+        if self.mode == "multiclass" and ce_mask is not None:
+            ce_mask = (ce_mask * np.arange(1, 8)[None, None, :]).max(axis=2).astype(np.long)
 
         return img, ce_mask
 
@@ -116,11 +122,22 @@ class SegDataset(torch.utils.data.Dataset):
             "image_name": img_name,
             "pad": str(pad),
             "image": torch.tensor(img).transpose(-1, 0).transpose(-1, -2).float(),
-            "mask": torch.tensor(ce_mask).transpose(-1, 0).transpose(-1, -2).float() if self.train else [],
+            "mask": torch.tensor(ce_mask, dtype=self.mask_dtype).transpose(-1, 0).transpose(-1, -2)
+            if self.train
+            else [],
         }
         return result
 
 
 def NearestSegDataset(SegDataset):
+    def __init__(self, *args, additional_meta: str, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.additional_meta_df = (
+            pd.read_csv(additional_meta).drop_duplicates(["ImageId", "ClassId"])
+            if additional_meta is not None
+            else None
+        )
+
     def __getitem__(self, index: int) -> Dict[str, Union[torch.Tensor, str]]:
+        # TODO add forward for this case
         pass
