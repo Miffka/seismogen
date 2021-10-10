@@ -121,7 +121,7 @@ def get_prediction(
             for j in range(range_start, range_end):
                 # each predicton consists of 8 classes, we iterate over them and add to the list
                 all_predicts.append(
-                    {"EncodedPixels": predict2str[j], "ImageId": batch["image_name"][i], "ClassId": j % 7}
+                    {"EncodedPixels": predict2str[j], "ImageId": batch["image_name"][i], "ClassId": j % num_classes}
                 )
 
     predict = pd.DataFrame(all_predicts)
