@@ -7,7 +7,7 @@ import torch
 
 from seismogen.data.augmentation import get_augmentations
 from seismogen.data.segy.dataset import SEGYDataset
-from seismogen.data.transforms import get_transforms
+from seismogen.data.segy.transforms import get_transforms
 
 
 def init_dataloaders(args: argparse.ArgumentParser) -> Dict[str, torch.utils.data.DataLoader]:

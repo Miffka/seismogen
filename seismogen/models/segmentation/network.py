@@ -1,10 +1,11 @@
 import argparse
+from typing import Dict, Tuple
 
 import segmentation_models_pytorch as smp  # noqa F401
 import torch
 
 
-def load_net(args: argparse.Namespace) -> torch.nn.Module:
+def load_net(args: argparse.Namespace) -> Tuple[torch.nn.Module, Dict]:
 
     model = eval(f"smp.{args.seg_model_arch}")(
         encoder_name=args.backbone,

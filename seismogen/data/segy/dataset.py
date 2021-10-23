@@ -142,7 +142,7 @@ class SEGYDataset:
             "pad": str(pad),
             "target_type": self.target_type,
             "image": torch.tensor(img).transpose(2, 0).transpose(1, 2).float(),
-            "target": torch.tensor(targ) if targ is not None else [],
+            "target": torch.tensor(targ).unsqueeze(0).float() if targ is not None else [],
         }
 
         return result
