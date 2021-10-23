@@ -6,9 +6,7 @@ import cv2
 from seismogen.models.fix_seeds import fix_seeds
 
 
-def get_augmentations(
-    resize: int = 224, augmentation_intensity: Optional[str] = None, gauss_limit: float = 0.0
-) -> A.Compose:
+def get_augmentations(resize: int = 224, augmentation_intensity: Optional[str] = None) -> A.Compose:
     fix_seeds(24)
     crop_limits = (int(resize * 0.85), resize)
 
@@ -19,6 +17,8 @@ def get_augmentations(
         p_dropout = 0.05
         p_flip = 0.15
         p_noise = 0.15
+        gauss_limit = 0.005
+
     elif augmentation_intensity == "light":
         p_augment = 0.25
         p_scale = 0.2
@@ -26,6 +26,8 @@ def get_augmentations(
         p_dropout = 0.05
         p_flip = 0.2
         p_noise = 0.2
+        gauss_limit = 0.01
+
     elif augmentation_intensity == "medium":
         p_augment = 0.5
         p_scale = 0.2
@@ -33,6 +35,8 @@ def get_augmentations(
         p_dropout = 0.1
         p_flip = 0.2
         p_noise = 0.2
+        gauss_limit = 0.015
+
     elif augmentation_intensity == "heavy":
         p_augment = 0.5
         p_scale = 0.35
@@ -40,6 +44,8 @@ def get_augmentations(
         p_dropout = 0.15
         p_flip = 0.35
         p_noise = 0.35
+        gauss_limit = 0.02
+
     elif augmentation_intensity is None:
         return None
     else:
