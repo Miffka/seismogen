@@ -108,8 +108,13 @@ def train_one_epoch(
         with torch.cuda.amp.autocast(enabled=fp16_scaler is not None):
             predict = model(sample["image"].to(torch_config.device))
 
-            loss_f_value = loss_f(predict, sample["target"].to(torch_config.device))
-            loss_d_value = loss_d(predict, sample["target"][:, 0].to(torch_config.device)).mean()
+            target_types = np.asarray(sample["target_type"])
+            valid_ids = target_types != 0
+            if valid_ids.sum() == 0:
+                continue
+
+            loss_f_value = loss_f(predict[valid_ids], sample["target"][valid_ids].to(torch_config.device))
+            loss_d_value = loss_d(predict[valid_ids], sample["target"][valid_ids].to(torch_config.device)).mean()
             loss = loss_f_value + loss_d_value
 
         if fp16_scaler is not None:

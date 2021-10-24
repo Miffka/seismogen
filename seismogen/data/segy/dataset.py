@@ -140,9 +140,11 @@ class SEGYDataset:
             "axis_idx": torch.tensor(row["axis_idx"]),
             "orient_idx": torch.tensor(row["orient_idx"]),
             "pad": str(pad),
-            "target_type": self.target_type,
+            "target_type": 0 if self.target_type is None else 1,
             "image": torch.tensor(img).transpose(2, 0).transpose(1, 2).float(),
-            "target": torch.tensor(targ).unsqueeze(0).float() if targ is not None else [],
+            "target": torch.tensor(targ).unsqueeze(0).float()
+            if targ is not None
+            else torch.empty(size=(1, self.size, self.size), dtype=torch.float),
         }
 
         return result
