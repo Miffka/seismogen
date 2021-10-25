@@ -1,7 +1,7 @@
 albumentations==1.0.3
 jupyter==1.0.0
 numpy==1.19.4
-opencv-python-headless==4.5.3.56
+opencv-python==4.5.4.58
 pandas==1.1.4
 pillow==8.0.1
 pytorch-toolbelt==0.4.4

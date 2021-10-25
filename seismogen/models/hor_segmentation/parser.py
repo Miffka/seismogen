@@ -57,4 +57,11 @@ def get_parser():
     parser.add_argument("--evaluate_before_training", action="store_true")
     parser.add_argument("--epochs", type=int, default=5)
 
+    # GAN - Generator parameters
+    parser.add_argument("--style_dim", type=int, default=100)
+
+    # GAN - Train params
+    parser.add_argument("--disc_clip_value", type=float, default=1e-2)
+    parser.add_argument("--n_critic", type=int, default=1)
+
     return parser
