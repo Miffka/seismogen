@@ -8,17 +8,18 @@ def define_optimizer(
     args: argparse.Namespace,
     net: torch.nn.Module,
     state: Dict[str, torch.Tensor],
+    lr_multiplier: float = 1.0,
     new_optimizer: bool = False,
     postfix: str = "",
 ) -> torch.optim.Optimizer:
     params = [p for p in net.parameters() if p.requires_grad]
     if args.optimizer_type == "adamw":
-        optimizer = torch.optim.AdamW(params, lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = torch.optim.AdamW(params, lr=args.lr * lr_multiplier, weight_decay=args.weight_decay)
     elif args.optimizer_type == "adam":
-        optimizer = torch.optim.Adam(params, lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = torch.optim.Adam(params, lr=args.lr * lr_multiplier, weight_decay=args.weight_decay)
     elif args.optimizer_type == "sgd":
         optimizer = torch.optim.SGD(
-            params, lr=args.lr, momentum=args.momentum, nesterov=True, weight_decay=args.weight_decay
+            params, lr=args.lr * lr_multiplier, momentum=args.momentum, nesterov=True, weight_decay=args.weight_decay
         )
     else:
         raise NotImplementedError(f"Optimizer is not implemented for type {args.optimizer_type}")

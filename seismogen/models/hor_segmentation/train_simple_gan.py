@@ -58,6 +58,8 @@ def train_one_epoch(
     generator.train()
     discriminator.train()
 
+    fake_imgs_classify = getattr(discriminator, "classification_head", None) is not None
+
     for batch_idx, sample in progress_bar:
         optimizer_d.zero_grad()
 
@@ -73,7 +75,18 @@ def train_one_epoch(
             if valid_ids.sum() == 0:
                 continue
 
-            try:
+            if fake_imgs_classify:
+                loss_sup_ce_v = loss_sup_ce(
+                    predict_d_real[0][valid_ids],
+                    sample["target"][valid_ids].to(torch_config.device),
+                )
+                loss_sup_d_v = loss_sup_d(
+                    predict_d_real[0][valid_ids],
+                    sample["target"][valid_ids].to(torch_config.device),
+                )
+                loss_unsup_disc_v = loss_unsup_disc(predict_d_real[1], predict_d_fake[1])
+
+            else:
                 loss_sup_ce_v = loss_sup_ce(
                     predict_d_real[valid_ids, predicted_class_idx].unsqueeze(1),
                     sample["target"][valid_ids].to(torch_config.device),
@@ -85,9 +98,6 @@ def train_one_epoch(
                 loss_unsup_disc_v = loss_unsup_disc(
                     predict_d_real[:, real_fake_class_idx], predict_d_fake[:, real_fake_class_idx]
                 )
-            except IndexError:
-                print(predict_d_real.shape, valid_ids, predicted_class_idx)
-                assert False
 
             if clip_value == 0:
                 grad_pen = compute_gradient_penalty(
@@ -118,7 +128,10 @@ def train_one_epoch(
             with torch.cuda.amp.autocast(enabled=fp16_scaler is not None):
                 predict_d_fake = discriminator(generator(z))
                 # Adversarial loss
-                loss_g = loss_unsup_gen(predict_d_fake[:, real_fake_class_idx])
+                if fake_imgs_classify:
+                    loss_g = loss_unsup_gen(predict_d_fake[1])
+                else:
+                    loss_g = loss_unsup_gen(predict_d_fake[:, real_fake_class_idx])
 
             if fp16_scaler is not None:
                 fp16_scaler.scale(loss_g).backward()
@@ -185,7 +198,7 @@ def train_model():
     discriminator.to(torch_config.device)
 
     optimizer_g = define_optimizer(args, generator, state, postfix="_gen")
-    optimizer_d = define_optimizer(args, discriminator, state)
+    optimizer_d = define_optimizer(args, discriminator, state, lr_multiplier=args.lr_discriminator_multiplier)
     scheduler_g = define_scheduler(args, optimizer_g, state, postfix="_gen")
     scheduler_d = define_scheduler(args, optimizer_d, state)
 

@@ -44,6 +44,7 @@ def get_parser():
     parser.add_argument("--num_classes", type=int, default=1)
     parser.add_argument("--norm_layer", type=str, default="BatchNorm")
     parser.add_argument("--gn_num_groups", type=int, default=32)
+    parser.add_argument("--fake_imgs_classify", action="store_true")
 
     # Optimizer params
     parser.add_argument("--optimizer_type", default="adamw")
@@ -66,5 +67,8 @@ def get_parser():
     # GAN - Train params
     parser.add_argument("--disc_clip_value", type=float, default=1e-2)
     parser.add_argument("--n_critic", type=int, default=1)
+
+    # GAN - Optimizer params
+    parser.add_argument("--lr_discriminator_multiplier", type=float, default=1.0)
 
     return parser

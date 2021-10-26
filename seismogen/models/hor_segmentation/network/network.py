@@ -15,7 +15,8 @@ def load_net(args: argparse.Namespace) -> Tuple[torch.nn.Module, Dict]:
         model, state = load_net_baseline(args)
         return model, state
     else:
-        args.num_classes += 1
+        if not args.fake_imgs_classify:
+            args.num_classes += 1
         disc, _ = load_net_baseline(args)
         gen, state = load_net_generator(args)
 

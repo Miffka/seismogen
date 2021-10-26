@@ -21,11 +21,22 @@ def replace_bns(model: nn.Module, NewNorm: nn.Module, num_groups: int = 32) -> N
 
 def load_net(args: argparse.Namespace) -> Tuple[nn.Module, Dict]:
 
+    if args.fake_imgs_classify:
+        aux_params = dict(
+            pooling="avg",
+            dropout=0.5,
+            activation=None,
+            classes=1,
+        )
+    else:
+        aux_params = None
+
     model = eval(f"smp.{args.seg_model_arch}")(
         encoder_name=args.backbone,
         encoder_weights=args.pretrained_weights,
         in_channels=args.num_channels,
         classes=args.num_classes,
+        aux_params=aux_params,
     )
     state = {}
     if args.norm_layer == "GroupNorm":

@@ -82,7 +82,17 @@ def visualize_masks(
     else:
         raise NotImplementedError("Only DataLoader and torch.Tensor input types are supported now")
 
-    output_masks = torch.sigmoid(model(imgs.to(torch_config.device))[:, shown_class_idx]).cpu().numpy()
+    fake_imgs_classify = getattr(model, "classification_head", None) is not None
+
+    output_masks = model(imgs.to(torch_config.device))
+
+    if fake_imgs_classify:
+        output_masks = output_masks[0][:, shown_class_idx]
+    else:
+        output_masks = output_masks[:, shown_class_idx]
+
+    output_masks = torch.sigmoid(output_masks).cpu().numpy()
+
     imgs = backward_transform(imgs).numpy().astype(np.uint8)[:, 0]
 
     pred_color = (0, 0, 255)
@@ -124,9 +134,15 @@ def eval_model(
     loss_dict = {ds_name: defaultdict(float) for ds_name in ds_names}
     loss_dict["all"] = defaultdict(float)
 
+    fake_imgs_classify = getattr(model, "classification_head", None) is not None
+
     for sample in tqdm.tqdm(val_dataloader, desc="Validate", total=len(val_dataloader)):
         with torch.cuda.amp.autocast(enabled=fp16):
-            predict = model(sample["image"].to(torch_config.device))[:, predicted_class_idx].unsqueeze(1)
+            predict = model(sample["image"].to(torch_config.device))
+            if fake_imgs_classify:
+                predict = predict[0]
+            else:
+                predict = predict[:, predicted_class_idx].unsqueeze(1)
             ds_names_sample = np.asarray(sample["dataset_name"])
 
             for ds_name in set(ds_names_sample):
