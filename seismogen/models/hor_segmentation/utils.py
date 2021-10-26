@@ -1,12 +1,15 @@
+import time
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
+import cv2
 import numpy as np
 import torch
 import tqdm
 from pytorch_toolbelt import losses
 from torch.utils.tensorboard import SummaryWriter
 
+from seismogen.data.segy.transforms import backward_transform
 from seismogen.torch_config import torch_config
 
 
@@ -38,6 +41,72 @@ def reduce_loss_dict(loss_dict: Dict[str, Dict[str, float]], postfix: str = "val
     return loss_dict_out
 
 
+def _add_masks(image: np.ndarray, mask: Union[np.ndarray, torch.Tensor], color: tuple) -> np.ndarray:
+
+    if isinstance(mask, torch.Tensor):
+        mask = mask.cpu().numpy()
+    mask = mask.round().astype(np.uint8)
+    image[mask > 0] = image[mask > 0] * 0.7 + np.asarray(color) * 0.3
+    return image
+
+
+@torch.no_grad()
+def visualize_masks(
+    model: torch.nn.Module,
+    input_data: Union[torch.utils.data.DataLoader, torch.Tensor],
+    epoch_num: int = 0,
+    header: str = "val",
+    shown_class_idx: int = 0,
+    writer: Optional[SummaryWriter] = None,
+):
+    if isinstance(input_data, torch.utils.data.DataLoader):
+        imgs = []
+        gt_masks = []
+        sample_names = []
+
+        for dataset in input_data.dataset.datasets:
+            sample_idx = len(dataset) // 2
+            sample = dataset[sample_idx]
+            imgs.append(sample["image"])
+            gt_masks.append(sample["target"].numpy()[0])
+            sample_names.append(f"{dataset.dataset_name}_{sample_idx}")
+
+        imgs = torch.stack(imgs)
+
+    elif isinstance(input_data, torch.Tensor):
+        assert input_data.ndim == 4
+        imgs = input_data
+        sample_names = [f"image_{idx}" for idx in range(imgs.shape[0])]
+        gt_masks = None
+
+    else:
+        raise NotImplementedError("Only DataLoader and torch.Tensor input types are supported now")
+
+    output_masks = torch.sigmoid(model(imgs.to(torch_config.device))[:, shown_class_idx]).cpu().numpy()
+    imgs = backward_transform(imgs).numpy().astype(np.uint8)[:, 0]
+
+    pred_color = (0, 0, 255)
+    gt_color = (255, 0, 0)
+
+    for idx, (img, output_mask, sample_name) in enumerate(zip(imgs, output_masks, sample_names)):
+        img = np.expand_dims(img, 2)
+        img = np.repeat(img, 3, axis=2)
+        img = _add_masks(img, output_mask, color=pred_color)
+        cv2.putText(img, "pred", (20, 25), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, pred_color, 2)
+
+        if gt_masks is not None:
+            img = _add_masks(img, gt_masks[idx], color=gt_color)
+            cv2.putText(img, "gt", (20, 45), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, gt_color, 2)
+
+        if writer is not None:
+            writer.add_image(
+                f"{header}/{sample_name}",
+                img,
+                global_step=epoch_num,
+                dataformats="HWC",
+            )
+
+
 @torch.no_grad()
 def eval_model(
     model: torch.nn.Module,
@@ -48,6 +117,7 @@ def eval_model(
     predicted_class_idx: int = 0,
     writer: Optional[SummaryWriter] = None,
 ):
+    model.eval()
     loss_f, loss_d = define_losses(reduction="mean")
 
     ds_names = get_all_dataset_names(val_dataloader)
@@ -77,5 +147,16 @@ def eval_model(
         for ds_name, ds_loss_dict in loss_dict.items():
             for metric_name, metric_value in ds_loss_dict.items():
                 writer.add_scalar(f"{metric_name}/{ds_name}", round(metric_value, 3), global_step=epoch_num)
+
+        visualize_masks(
+            model,
+            val_dataloader,
+            epoch_num=epoch_num,
+            header=postfix,
+            shown_class_idx=predicted_class_idx,
+            writer=writer,
+        )
+
+    time.sleep(5)
 
     return loss_dict["all"]

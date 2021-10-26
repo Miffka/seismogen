@@ -14,6 +14,7 @@ from seismogen.models.fix_seeds import fix_seeds
 from seismogen.models.hor_segmentation.gan_utils import compute_gradient_penalty
 from seismogen.models.hor_segmentation.network.network import load_net
 from seismogen.models.hor_segmentation.parser import get_parser
+from seismogen.models.hor_segmentation.utils import visualize_masks  # noqa F401
 from seismogen.models.hor_segmentation.utils import define_losses, eval_model
 from seismogen.models.train_utils import define_optimizer, define_scheduler
 from seismogen.torch_config import torch_config
@@ -53,6 +54,9 @@ def train_one_epoch(
     progress_bar = tqdm.tqdm(enumerate(dataloaders["train"]), desc=f"Train epoch {epoch_num}", total=total_samples)
     batch_size = dataloaders["train"].batch_size
     style_dim = generator.style_dim
+
+    generator.train()
+    discriminator.train()
 
     for batch_idx, sample in progress_bar:
         optimizer_d.zero_grad()
@@ -154,8 +158,10 @@ def train_one_epoch(
         writer=writer,
     )
 
-    # fake_imgs = visualize_generator(generator, fixed_noise, epoch_num, writer=writer)
-    # visualize_discriminator(discriminator, fixed_noise, dataloaders["val"], epoch_num, writer=writer)
+    generator.eval()
+    with torch.no_grad():
+        fake_imgs = generator(fixed_noise.to(torch_config.device)).cpu()
+    visualize_masks(discriminator, fake_imgs, epoch_num, header="generated", writer=writer)
 
     return val_loss_dict["Loss DICE_val"]
 

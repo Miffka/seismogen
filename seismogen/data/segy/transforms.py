@@ -1,4 +1,5 @@
 import albumentations as A
+import torch
 
 
 def get_transforms(normalize: bool = True, num_channels: int = 3) -> A.Compose:
@@ -17,3 +18,12 @@ def get_transforms(normalize: bool = True, num_channels: int = 3) -> A.Compose:
     )
 
     return transforms
+
+
+def backward_transform(image: torch.Tensor, normalized: bool = True) -> torch.Tensor:
+    if normalized:
+        ret_img = (image * 0.13 + 0.5) * 255.0
+    else:
+        ret_img = image * 255.0
+
+    return ret_img

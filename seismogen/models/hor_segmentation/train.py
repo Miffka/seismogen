@@ -27,6 +27,7 @@ def train_one_epoch(
     writer: Optional[SummaryWriter] = None,
 ) -> torch.nn.Module:
 
+    model.train()
     loss_f, loss_d = define_losses(reduction="mean")
 
     total_samples = len(dataloaders["train"])
