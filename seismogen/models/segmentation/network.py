@@ -3,9 +3,23 @@ from typing import Dict, Tuple
 
 import segmentation_models_pytorch as smp  # noqa F401
 import torch
+import torch.nn as nn
 
 
-def load_net(args: argparse.Namespace) -> Tuple[torch.nn.Module, Dict]:
+def replace_bns(model: nn.Module, NewNorm: nn.Module, num_groups: int = 32) -> None:
+    for name, module in model.named_children():
+        if len(list(module.children())) > 0:
+            ## compound module, go inside it
+            replace_bns(module, NewNorm, num_groups=num_groups)
+
+        if isinstance(module, nn.BatchNorm2d):
+            ## simple module
+            num_channels = module.num_features
+            new_bn = NewNorm(num_groups, num_channels)
+            setattr(model, name, new_bn)
+
+
+def load_net(args: argparse.Namespace) -> Tuple[nn.Module, Dict]:
 
     model = eval(f"smp.{args.seg_model_arch}")(
         encoder_name=args.backbone,
@@ -14,6 +28,8 @@ def load_net(args: argparse.Namespace) -> Tuple[torch.nn.Module, Dict]:
         classes=args.num_classes,
     )
     state = {}
+    if args.norm_layer == "GroupNorm":
+        replace_bns(model, nn.GroupNorm, num_groups=args.gn_num_groups)
 
     if args.weights is not None:
         state = torch.load(args.weights, map_location="cpu")

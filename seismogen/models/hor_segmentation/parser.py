@@ -42,6 +42,8 @@ def get_parser():
     parser.add_argument("--backbone", default="resnet18")
     parser.add_argument("--pretrained_weights", default="imagenet")
     parser.add_argument("--num_classes", type=int, default=1)
+    parser.add_argument("--norm_layer", type=str, default="BatchNorm")
+    parser.add_argument("--gn_num_groups", type=int, default=32)
 
     # Optimizer params
     parser.add_argument("--optimizer_type", default="adamw")
