@@ -12,6 +12,28 @@ from torchvision import transforms
 from seismogen.data.letterbox import letterbox_forward
 
 
+def get_first_by_group(df: pd.DataFrame, test_size: float, stratify: Optional[str] = None):
+
+    if stratify is None:
+        train_n = int(df.shape[0] * (1 - test_size))
+        new_col = np.asarray([0] * train_n + [1] * (df.shape[0] - train_n))
+        df1 = df.iloc[new_col == 0].copy()
+        df2 = df.iloc[new_col == 1].copy()
+
+        return df1, df2
+
+    else:
+        strat_classes = df[stratify].unique()
+        df1_out = pd.DataFrame(columns=df.columns)
+        df2_out = pd.DataFrame(columns=df.columns)
+        for strat_class in strat_classes:
+            df1, df2 = get_first_by_group(df.iloc[(df[stratify] == strat_class).values], test_size=test_size)
+            df1_out = df1_out.append(df1)
+            df2_out = df2_out.append(df2)
+
+        return df1_out, df2_out
+
+
 class SEGYDataset:
     def __init__(
         self,
@@ -20,6 +42,7 @@ class SEGYDataset:
         target_type: Optional[str] = None,
         test_size: float = 0.0,
         split: str = "train",
+        split_type: str = "random",
         random_state: int = 24,
         size: int = 512,
         letterbox: bool = False,
@@ -33,6 +56,8 @@ class SEGYDataset:
         self.test_size = test_size
         assert split in ["train", "val", "test"]
         self.split = split
+        assert split_type in ["random", "first"]
+        self.split_type = split_type
         self.random_state = random_state
 
         self.size = size
@@ -46,19 +71,24 @@ class SEGYDataset:
     def init_markup(self):
         markup = pd.read_csv(self.markup_path)
         if self.test_size > 0:
-            train_val_markup, test_markup = train_test_split(
-                markup,
-                test_size=self.test_size,
-                random_state=self.random_state,
-                stratify=markup["orient"],
-            )
-            val_size = self.test_size / (1 - self.test_size)
-            train_markup, val_markup = train_test_split(
-                train_val_markup,
-                test_size=val_size,
-                random_state=self.random_state,
-                stratify=train_val_markup["orient"],
-            )
+            if self.split_type == "random":
+                train_val_markup, test_markup = train_test_split(
+                    markup,
+                    test_size=self.test_size,
+                    random_state=self.random_state,
+                    stratify=markup["orient"],
+                )
+                val_size = self.test_size / (1 - self.test_size)
+                train_markup, val_markup = train_test_split(
+                    train_val_markup,
+                    test_size=val_size,
+                    random_state=self.random_state,
+                    stratify=train_val_markup["orient"],
+                )
+            elif self.split_type == "first":
+                train_val_markup, test_markup = get_first_by_group(markup, test_size=self.test_size, stratify="orient")
+                val_size = self.test_size / (1 - self.test_size)
+                train_markup, val_markup = get_first_by_group(train_val_markup, test_size=val_size, stratify="orient")
 
             if self.split == "train":
                 markup = train_markup

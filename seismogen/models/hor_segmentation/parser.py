@@ -29,6 +29,7 @@ def get_parser():
     parser.add_argument("--letterbox", action="store_true")
     parser.add_argument("--augmentation_intensity", default=None)
     parser.add_argument("--test_size", type=float, default=0.2)
+    parser.add_argument("--split_type", type=str, default="first")
 
     # Dataloader params
     parser.add_argument("--batch_size", type=int, default=8)

@@ -46,6 +46,7 @@ def init_dataloaders(args: argparse.ArgumentParser) -> Dict[str, torch.utils.dat
                     target_type=target_type,
                     test_size=args.test_size,
                     split=split,
+                    split_type=args.split_type,
                     random_state=args.random_state,
                     size=args.size,
                     letterbox=args.letterbox,
