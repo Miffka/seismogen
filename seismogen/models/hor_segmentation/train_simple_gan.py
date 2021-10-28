@@ -63,6 +63,8 @@ def train_one_epoch(
     for batch_idx, sample in progress_bar:
         optimizer_d.zero_grad()
 
+        calc_sup_loss = True
+
         with torch.cuda.amp.autocast(enabled=fp16_scaler is not None):
             z = torch.randn((batch_size, style_dim)).to(torch_config.device)
 
@@ -72,29 +74,39 @@ def train_one_epoch(
 
             target_types = np.asarray(sample["target_type"])
             valid_ids = target_types != 0
+
             if valid_ids.sum() == 0:
-                continue
+                calc_sup_loss = False
+
+            if calc_sup_loss:
+                if fake_imgs_classify:
+                    loss_sup_ce_v = loss_sup_ce(
+                        predict_d_real[0][valid_ids],
+                        sample["target"][valid_ids].to(torch_config.device),
+                    )
+                    loss_sup_d_v = loss_sup_d(
+                        predict_d_real[0][valid_ids],
+                        sample["target"][valid_ids].to(torch_config.device),
+                    )
+
+                else:
+                    loss_sup_ce_v = loss_sup_ce(
+                        predict_d_real[valid_ids, predicted_class_idx].unsqueeze(1),
+                        sample["target"][valid_ids].to(torch_config.device),
+                    )
+                    loss_sup_d_v = loss_sup_d(
+                        predict_d_real[valid_ids, predicted_class_idx].unsqueeze(1),
+                        sample["target"][valid_ids].to(torch_config.device),
+                    )
+
+            else:
+                loss_sup_ce_v = 0
+                loss_sup_d_v = 0
 
             if fake_imgs_classify:
-                loss_sup_ce_v = loss_sup_ce(
-                    predict_d_real[0][valid_ids],
-                    sample["target"][valid_ids].to(torch_config.device),
-                )
-                loss_sup_d_v = loss_sup_d(
-                    predict_d_real[0][valid_ids],
-                    sample["target"][valid_ids].to(torch_config.device),
-                )
                 loss_unsup_disc_v = loss_unsup_disc(predict_d_real[1], predict_d_fake[1])
 
             else:
-                loss_sup_ce_v = loss_sup_ce(
-                    predict_d_real[valid_ids, predicted_class_idx].unsqueeze(1),
-                    sample["target"][valid_ids].to(torch_config.device),
-                )
-                loss_sup_d_v = loss_sup_d(
-                    predict_d_real[valid_ids, predicted_class_idx].unsqueeze(1),
-                    sample["target"][valid_ids].to(torch_config.device),
-                )
                 loss_unsup_disc_v = loss_unsup_disc(
                     predict_d_real[:, real_fake_class_idx], predict_d_fake[:, real_fake_class_idx]
                 )
