@@ -100,8 +100,8 @@ def train_one_epoch(
                     )
 
             else:
-                loss_sup_ce_v = 0
-                loss_sup_d_v = 0
+                loss_sup_ce_v = torch.tensor(0, device=torch_config.device)
+                loss_sup_d_v = torch.tensor(0, device=torch_config.device)
 
             if fake_imgs_classify:
                 loss_unsup_disc_v = loss_unsup_disc(predict_d_real[1], predict_d_fake[1])
