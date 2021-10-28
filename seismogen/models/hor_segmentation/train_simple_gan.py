@@ -141,17 +141,21 @@ def train_one_epoch(
                 loss_g.backward()
                 optimizer_g.step()
 
-        progress_bar.set_description(f"Epoch: {epoch_num} Loss_d: {loss_d.item():.3f} Loss_g: {loss_g.item():.3f}")
+            progress_bar.set_description(f"Epoch: {epoch_num} Loss_d: {loss_d.item():.3f} Loss_g: {loss_g.item():.3f}")
 
-        if writer is not None:
-            global_step = batch_idx + total_samples * epoch_num
-            writer.add_scalar("Loss_train/Disc/Total", round(loss_d.item(), 3), global_step=global_step)
-            writer.add_scalar("Loss_train/Disc/Supervised_CE", round(loss_sup_ce_v.item(), 3), global_step=global_step)
-            writer.add_scalar("Loss_train/Disc/Supervised_DICE", round(loss_sup_d_v.item(), 3), global_step=global_step)
-            writer.add_scalar(
-                "Loss_train/Disc/Unsupervised", round(loss_unsup_disc_v.item(), 3), global_step=global_step
-            )
-            writer.add_scalar("Loss_train/Gen/Unsupervised", round(loss_g.item(), 3), global_step=global_step)
+            if writer is not None:
+                global_step = batch_idx + total_samples * epoch_num
+                writer.add_scalar("Loss_train/Disc/Total", round(loss_d.item(), 3), global_step=global_step)
+                writer.add_scalar(
+                    "Loss_train/Disc/Supervised_CE", round(loss_sup_ce_v.item(), 3), global_step=global_step
+                )
+                writer.add_scalar(
+                    "Loss_train/Disc/Supervised_DICE", round(loss_sup_d_v.item(), 3), global_step=global_step
+                )
+                writer.add_scalar(
+                    "Loss_train/Disc/Unsupervised", round(loss_unsup_disc_v.item(), 3), global_step=global_step
+                )
+                writer.add_scalar("Loss_train/Gen/Unsupervised", round(loss_g.item(), 3), global_step=global_step)
 
     val_loss_dict = eval_model(
         discriminator,
